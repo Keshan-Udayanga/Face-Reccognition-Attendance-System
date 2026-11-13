@@ -1,0 +1,19 @@
+{
+  "name": "smartface-admin-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "parcel public/index.html --open",
+    "build": "parcel build public/index.html"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router": "^7.18.5"
+  },
+  "devDependencies": {
+    "parcel": "^2.13.3"
+  }
+}

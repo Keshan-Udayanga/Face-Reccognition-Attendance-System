@@ -1,0 +1,504 @@
+.add-employee-page {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.form-page-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: -1px;
+}
+
+.form-page-intro > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.form-page-intro p {
+  margin: 0;
+  color: #7d899c;
+  font-size: 12px;
+}
+
+.back-link {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  color: #64728a;
+  font-size: 11px;
+  font-weight: 610;
+  transition: color 140ms ease;
+}
+
+.back-link:hover {
+  color: var(--color-blue);
+}
+
+.form-required-note {
+  color: #8994a5;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.required-mark {
+  color: #e15c62;
+  font-weight: 720;
+}
+
+.employee-form {
+  display: grid;
+  gap: 17px;
+}
+
+.form-section {
+  padding: 21px 23px;
+}
+
+.form-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 19px;
+}
+
+.form-section-icon {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  background: #edf2ff;
+  color: #476bd2;
+}
+
+.form-section-heading > div {
+  min-width: 0;
+}
+
+.form-section-heading h2 {
+  margin: 0;
+  color: #26344c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-section-heading p {
+  margin: 2px 0 0;
+  color: #8a95a7;
+  font-size: 10px;
+}
+
+.optional-label {
+  margin-left: auto;
+  padding: 5px 8px;
+  border: 1px solid #e9edf4;
+  border-radius: 6px;
+  color: #8894a6;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+}
+
+.photo-upload-layout {
+  display: flex;
+  align-items: center;
+  gap: 21px;
+  padding: 0 1px 17px;
+}
+
+.photo-dropzone {
+  position: relative;
+  display: grid;
+  width: 142px;
+  height: 142px;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed #cdd7ec;
+  border-radius: 15px;
+  background: #f8faff;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.photo-dropzone-active {
+  border-color: #6489eb;
+  background: #eff4ff;
+  box-shadow: 0 0 0 4px rgba(56, 103, 232, 0.09);
+}
+
+.photo-dropzone-has-image {
+  border-style: solid;
+  border-color: #e0e6f1;
+  background: #f4f6fb;
+}
+
+.photo-placeholder {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  color: #9aa8c3;
+}
+
+.photo-placeholder-icon {
+  display: grid;
+  width: 66px;
+  height: 66px;
+  place-items: center;
+  border: 1px solid #e6ecf8;
+  border-radius: 50%;
+  background: #eef3ff;
+  color: #7993d5;
+}
+
+.photo-placeholder-text {
+  color: #a0aabd;
+  font-size: 8px;
+  font-weight: 720;
+  letter-spacing: 1px;
+}
+
+.photo-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-remove-button {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  background: rgba(28, 38, 57, 0.71);
+  color: white;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.photo-remove-button:hover {
+  background: #c8444a;
+}
+
+.photo-upload-copy {
+  align-self: center;
+}
+
+.photo-upload-copy h3 {
+  margin: 0 0 4px;
+  color: #35435a;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.photo-upload-copy p {
+  max-width: 390px;
+  margin: 0;
+  color: #8994a6;
+  font-size: 10px;
+}
+
+.photo-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 11px;
+}
+
+.upload-button {
+  min-height: 35px;
+  gap: 7px;
+  padding: 0 11px;
+  border-radius: 8px;
+  color: #4766b8;
+  font-size: 10px;
+}
+
+.photo-remove-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 3px;
+  border: 0;
+  background: transparent;
+  color: #b35459;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 570;
+}
+
+.photo-remove-text:hover {
+  color: #d34249;
+}
+
+.photo-format-note {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: #98a2b1;
+  font-size: 9px;
+}
+
+.photo-storage-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 13px;
+  border-top: 1px solid #edf0f5;
+  color: #8190a7;
+  font-size: 10px;
+}
+
+.photo-storage-note svg {
+  flex: 0 0 auto;
+  color: #7892d4;
+}
+
+.image-field-error {
+  display: block;
+  margin-top: 5px;
+}
+
+.employee-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 19px;
+}
+
+.generated-employee-id {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: -2px 0 17px;
+  padding: 11px 13px;
+  border: 1px solid #e8edf8;
+  border-radius: 9px;
+  background: #f8faff;
+}
+
+.generated-employee-id > span:first-child {
+  color: #78869d;
+  font-size: 9px;
+  font-weight: 720;
+  letter-spacing: 0.65px;
+}
+
+.generated-employee-id strong {
+  color: #3558b3;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.generated-employee-id > span:last-child {
+  grid-column: 1 / -1;
+  color: #8c97a9;
+  font-size: 9px;
+}
+
+.form-field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.form-field > label {
+  color: #536178;
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.form-field > input,
+.form-field > select,
+.form-field > textarea {
+  width: 100%;
+  min-height: 41px;
+  padding: 0 11px;
+  border: 1px solid #e6eaf1;
+  border-radius: 8px;
+  background: #fff;
+  color: #35435a;
+  font-size: 11px;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.form-field > input::placeholder,
+.form-field > textarea::placeholder {
+  color: #a2abba;
+}
+
+.form-field > input:hover,
+.form-field > select:hover,
+.form-field > textarea:hover {
+  border-color: #cfd7e5;
+}
+
+.form-field > input:focus,
+.form-field > select:focus,
+.form-field > textarea:focus {
+  border-color: #8da7ee;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(56, 103, 232, 0.09);
+}
+
+.form-field > select {
+  padding-right: 30px;
+  color: #56647a;
+  cursor: pointer;
+}
+
+.form-field > select:has(option:checked[value=""]) {
+  color: #a2abba;
+}
+
+.form-field > textarea {
+  min-height: 76px;
+  padding: 10px 11px;
+  resize: vertical;
+}
+
+.form-field-invalid > input,
+.form-field-invalid > select,
+.form-field-invalid > textarea {
+  border-color: #e98f92;
+  background-color: #fffafa;
+}
+
+.field-error {
+  color: #bf454b;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.address-field {
+  grid-column: 1 / -1;
+}
+
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 1px 0;
+}
+
+.form-footer-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #909bad;
+  font-size: 9px;
+}
+
+.form-footer-tip svg {
+  flex: 0 0 auto;
+  color: #8497c3;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-actions .secondary-button,
+.form-actions .primary-button {
+  min-height: 39px;
+  padding: 0 13px;
+  font-size: 10px;
+}
+
+.reset-button {
+  color: #718097;
+}
+
+.save-button {
+  min-width: 135px;
+}
+
+@media (max-width: 760px) {
+  .form-section {
+    padding: 18px;
+  }
+
+  .form-actions {
+    gap: 6px;
+  }
+
+  .form-actions .secondary-button,
+  .form-actions .primary-button {
+    padding: 0 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  .form-page-intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-required-note {
+    align-self: flex-end;
+    margin-top: -25px;
+  }
+
+  .photo-upload-layout {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 13px;
+  }
+
+  .photo-dropzone {
+    width: 125px;
+    height: 125px;
+  }
+
+  .employee-fields-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .address-field {
+    grid-column: auto;
+  }
+
+  .form-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .form-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .save-button {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .cancel-button {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .reset-button {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}

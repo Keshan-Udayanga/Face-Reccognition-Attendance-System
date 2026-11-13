@@ -1,0 +1,11 @@
+
+opencv-python
+deepface
+tensorflow
+numpy
+psycopg2-binary
+pandas
+python-dotenv
+fastapi
+uvicorn
+python-multipart

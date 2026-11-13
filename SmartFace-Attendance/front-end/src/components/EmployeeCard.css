@@ -1,0 +1,128 @@
+.employee-name-cell {
+  display: flex;
+  min-width: 180px;
+  align-items: center;
+  gap: 11px;
+}
+
+.employee-avatar {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid #e8edf7;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #f1f5ff, #e6edff);
+  color: #536fbd;
+  font-size: 11px;
+  font-weight: 730;
+}
+
+.employee-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.employee-name-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.employee-name-copy strong {
+  overflow: hidden;
+  color: #26344c;
+  font-size: 12px;
+  font-weight: 660;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-name-copy > span {
+  overflow: hidden;
+  color: #8a95a6;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-id-cell {
+  color: #68768b;
+  font-size: 11px;
+  font-weight: 580;
+  white-space: nowrap;
+}
+
+.employee-email-cell {
+  max-width: 225px;
+  overflow: hidden;
+  color: #68768b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.status-badge > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-active {
+  background: #e9f7f0;
+  color: #22855f;
+}
+
+.status-inactive {
+  background: #f0f2f5;
+  color: #727d8f;
+}
+
+.employee-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.row-action-button {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #7d899b;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.row-action-button:hover {
+  border-color: #e5eaf4;
+  background: #f5f7fb;
+  color: var(--color-blue);
+}
+
+.row-action-button.row-action-delete:hover {
+  border-color: #f5d6d7;
+  background: #fff1f1;
+  color: var(--color-red);
+}
