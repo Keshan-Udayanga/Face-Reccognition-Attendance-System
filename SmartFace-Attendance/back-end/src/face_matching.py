@@ -3,10 +3,6 @@ import numpy as np
 
 
 def cosine_distance(embedding1, embedding2):
-    """
-    Calculate cosine distance between two face embeddings.
-    Lower distance means more similar faces.
-    """
 
     vector1 = np.array(embedding1, dtype=np.float32)
     vector2 = np.array(embedding2, dtype=np.float32)
@@ -25,9 +21,6 @@ def cosine_distance(embedding1, embedding2):
 
 
 def find_best_match(input_embedding, registered_faces):
-    """
-    Compare an input face embedding with registered employees.
-    """
 
     best_match = None
     lowest_distance = float("inf")
@@ -40,10 +33,19 @@ def find_best_match(input_embedding, registered_faces):
         )
 
         if distance < lowest_distance:
+
             lowest_distance = distance
             best_match = employee
 
+    # No registered employees
     if best_match is None:
+        return None
+
+    # Temporary threshold for initial testing only
+    threshold = 0.40
+
+    # Reject unknown faces
+    if lowest_distance > threshold:
         return None
 
     return {
