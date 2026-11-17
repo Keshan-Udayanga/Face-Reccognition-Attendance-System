@@ -1,12 +1,21 @@
+import os
 import re
+import threading
+import time
+import uuid
+from datetime import datetime
 from typing import Optional
 
+import cv2
+import numpy as np
 import psycopg2
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 
 from database.connection import get_connection
+from src.attendance_service import get_todays_attendance, mark_attendance
+from src.employee_service import get_registered_employees
+from src.face_matching import find_best_match
 
 app = FastAPI(title="SmartFace Employee API", version="1.0.0")
 
@@ -21,12 +30,21 @@ app.add_middleware(
 )
 
 MAX_IMAGE_SIZE_BYTES = 1024 * 1024
+MAX_FRAME_SIZE_BYTES = 4 * 1024 * 1024
+RECOGNITION_REARM_SECONDS = 3
 ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+}
+ALLOWED_FRAME_TYPES = {
     "image/jpeg": (b"\xff\xd8\xff",),
     "image/png": (b"\x89PNG\r\n\x1a\n",),
 }
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 PHONE_PATTERN = re.compile(r"^\+?[\d\s().-]+$")
+_FACE_DETECTOR = None
+_RECOGNITION_LOCK = threading.RLock()
+_RECOGNITION_SESSIONS = {}
 
 
 def _connect():
@@ -176,6 +194,234 @@ def health_check():
         return {"status": "ok"}
     finally:
         connection.close()
+
+
+@app.post("/api/attendance/recognition/start", status_code=201)
+def start_recognition():
+    try:
+        registered_employees = get_registered_employees()
+    except ConnectionError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    session_id = uuid.uuid4().hex
+    now = time.monotonic()
+    with _RECOGNITION_LOCK:
+        expired_sessions = [
+            existing_id
+            for existing_id, session in _RECOGNITION_SESSIONS.items()
+            if now - session["last_activity"] > 1800
+        ]
+        for existing_id in expired_sessions:
+            del _RECOGNITION_SESSIONS[existing_id]
+
+        _RECOGNITION_SESSIONS[session_id] = {
+            "employees": registered_employees,
+            "employee_details": {},
+            "last_seen": {},
+            "absent_since": {},
+            "last_activity": now,
+        }
+
+    return {
+        "sessionId": session_id,
+        "status": "ready",
+        "registeredEmployees": len(registered_employees),
+    }
+
+
+@app.delete("/api/attendance/recognition/{session_id}", status_code=204)
+def stop_recognition(session_id: str):
+    with _RECOGNITION_LOCK:
+        _RECOGNITION_SESSIONS.pop(session_id, None)
+    return Response(status_code=204)
+
+
+@app.post("/api/attendance/recognition/frame")
+def recognize_frame(
+    request: Request,
+    session_id: str = Form(...),
+    frame: UploadFile = File(...),
+):
+    global _FACE_DETECTOR
+
+    if frame.content_type not in ALLOWED_FRAME_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail="Camera frame must be a JPG or PNG image.",
+        )
+
+    frame_bytes = frame.file.read(MAX_FRAME_SIZE_BYTES + 1)
+    if len(frame_bytes) > MAX_FRAME_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Camera frame is too large.")
+    if (
+        not frame_bytes
+        or not frame_bytes.startswith(ALLOWED_FRAME_TYPES[frame.content_type])
+    ):
+        raise HTTPException(status_code=422, detail="Invalid camera frame image.")
+
+    with _RECOGNITION_LOCK:
+        session = _RECOGNITION_SESSIONS.get(session_id)
+        if session is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Recognition session is not active. Start recognition again.",
+            )
+        session["last_activity"] = time.monotonic()
+        employees = session["employees"]
+
+    if _FACE_DETECTOR is None:
+        detector_path = os.path.join(
+            cv2.data.haarcascades,
+            "haarcascade_frontalface_default.xml",
+        )
+        if not os.path.isfile(detector_path):
+            raise HTTPException(
+                status_code=503,
+                detail="The OpenCV face detection cascade is not installed.",
+            )
+        _FACE_DETECTOR = cv2.CascadeClassifier(detector_path)
+
+    if _FACE_DETECTOR.empty():
+        raise HTTPException(status_code=503, detail="The face detector is unavailable.")
+
+    image = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(status_code=422, detail="Could not decode camera frame.")
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    detected_faces = _FACE_DETECTOR.detectMultiScale(
+        gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(80, 80),
+    )
+    faces = []
+    present_employee_ids = set()
+
+    try:
+        from src.face_recognition import generate_face_embedding
+    except (ImportError, ValueError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Face recognition dependencies could not be loaded. "
+                "Check the TensorFlow and DeepFace installation."
+            ),
+        ) from error
+
+    for (x, y, width, height) in detected_faces:
+        face_image = image[y:y + height, x:x + width]
+        encoded, encoded_face = cv2.imencode(".jpg", face_image)
+        if not encoded:
+            raise HTTPException(status_code=422, detail="Could not process detected face.")
+
+        embedding = generate_face_embedding(encoded_face.tobytes())
+        match = find_best_match(embedding, employees)
+        if match is None:
+            faces.append({
+                "recognized": False,
+                "status": "Unknown Person",
+                "employee": None,
+                "attendanceAction": None,
+                "timestamp": None,
+                "newAttendance": False,
+                "isNewRecognition": False,
+            })
+            continue
+
+        employee_id = match["employee_id"]
+        present_employee_ids.add(employee_id)
+        now = time.monotonic()
+        with _RECOGNITION_LOCK:
+            session = _RECOGNITION_SESSIONS.get(session_id)
+            if session is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Recognition session is no longer active.",
+                )
+
+            last_seen = session["last_seen"]
+            absent_since = session["absent_since"]
+            employee_absent_since = absent_since.get(employee_id)
+            if (
+                employee_absent_since is not None
+                and now - employee_absent_since >= RECOGNITION_REARM_SECONDS
+            ):
+                del last_seen[employee_id]
+                del absent_since[employee_id]
+
+            is_new_recognition = employee_id not in last_seen
+            last_seen[employee_id] = now
+            absent_since.pop(employee_id, None)
+            session["last_activity"] = now
+
+            employee = session["employee_details"].get(employee_id)
+            if employee is None:
+                connection = _connect()
+                try:
+                    with connection.cursor() as cursor:
+                        employee = _fetch_employee(
+                            cursor,
+                            employee_id,
+                            str(request.base_url).rstrip("/"),
+                        )
+                finally:
+                    connection.close()
+                session["employee_details"][employee_id] = employee
+
+            attendance_action = None
+            timestamp = None
+            if is_new_recognition:
+                attendance_action = mark_attendance(
+                    employee_id,
+                    employee["fullName"],
+                )
+                if attendance_action in ("CHECK IN", "CHECK OUT"):
+                    timestamp = datetime.now().isoformat(timespec="seconds")
+
+            faces.append({
+                "recognized": True,
+                "status": "Recognized",
+                "employee": employee,
+                "attendanceAction": attendance_action,
+                "timestamp": timestamp,
+                "newAttendance": attendance_action in ("CHECK IN", "CHECK OUT"),
+                "isNewRecognition": is_new_recognition,
+            })
+
+    with _RECOGNITION_LOCK:
+        session = _RECOGNITION_SESSIONS.get(session_id)
+        if session is not None:
+            now = time.monotonic()
+            session["last_activity"] = now
+            last_seen = session["last_seen"]
+            absent_since = session["absent_since"]
+            for employee_id in list(last_seen):
+                if employee_id in present_employee_ids:
+                    absent_since.pop(employee_id, None)
+                    continue
+                absent_since.setdefault(employee_id, now)
+                if now - absent_since[employee_id] >= RECOGNITION_REARM_SECONDS:
+                    del last_seen[employee_id]
+                    del absent_since[employee_id]
+
+    return {"faces": faces}
+
+
+@app.get("/api/attendance/today")
+def today_attendance():
+    rows = get_todays_attendance()
+    return [
+        {
+            "employeeId": row["Employee ID"],
+            "employeeName": row["Employee Name"],
+            "checkIn": row.get("Check In", ""),
+            "checkOut": row.get("Check Out", ""),
+            "totalHours": row.get("Total Hours", ""),
+            "status": "Checked out" if row.get("Check Out") else "Present",
+        }
+        for row in rows
+    ]
 
 
 @app.get("/api/employees")

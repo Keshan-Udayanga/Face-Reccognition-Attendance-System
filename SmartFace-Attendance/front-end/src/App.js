@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import AddEmployee from "./pages/AddEmployee";
+import Attendance from "./pages/Attendance";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 
@@ -10,7 +11,7 @@ const pageDetails = [
   { path: "/", title: "Dashboard", subtitle: "Welcome back, Admin!" },
   { path: "/employees/new", title: "Add Employee", subtitle: "Add a new team member" },
   { path: "/employees", title: "Employees", subtitle: "Manage your team and employee records" },
-  { path: "/attendance", title: "Attendance", subtitle: "Track your team's attendance" },
+  { path: "/attendance", title: "Live Attendance", subtitle: "AI-powered real-time employee attendance recognition." },
   { path: "/reports", title: "Reports", subtitle: "Workforce insights and summaries" },
   { path: "/settings", title: "Settings", subtitle: "Manage your workspace preferences" },
 ];
@@ -69,7 +70,7 @@ export default function App() {
         <Route element={<Employees />} path="employees" />
         <Route element={<AddEmployee />} path="employees/new" />
         <Route element={<AddEmployee />} path="employees/:employeeId/edit" />
-        <Route element={<ComingSoon title="Attendance" />} path="attendance" />
+        <Route element={<Attendance />} path="attendance" />
         <Route element={<ComingSoon title="Reports" />} path="reports" />
         <Route element={<ComingSoon title="Settings" />} path="settings" />
       </Route>

@@ -1,7 +1,8 @@
 
 import csv
 import os
-from datetime import datetime
+import threading
+from datetime import date, datetime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -17,6 +18,8 @@ FIELDNAMES = [
     "Check Out",
     "Total Hours"
 ]
+
+_ATTENDANCE_LOCK = threading.Lock()
 
 
 def calculate_working_hours(check_in, check_out):
@@ -73,54 +76,80 @@ def create_attendance_file():
 
 def mark_attendance(employee_id, employee_name):
 
-    create_attendance_file()
+    with _ATTENDANCE_LOCK:
+        create_attendance_file()
 
-    now = datetime.now()
+        now = datetime.now()
 
-    today = now.strftime("%Y-%m-%d")
-    current_time = now.strftime("%H:%M:%S")
+        today = now.strftime("%Y-%m-%d")
+        today_formats = {today, now.strftime("%m/%d/%Y")}
+        current_time = now.strftime("%H:%M:%S")
 
-    with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        rows = list(reader)
+        with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+            rows = list(reader)
 
-    for row in rows:
+        for row in rows:
 
-        if (
-            row["Employee ID"] == str(employee_id)
-            and row["Date"] == today
-        ):
+            if (
+                row["Employee ID"] == str(employee_id)
+                and row["Date"] in today_formats
+            ):
 
-            if row["Check Out"] == "":
+                if row["Check Out"] == "":
 
-                row["Check Out"] = current_time
+                    row["Check Out"] = current_time
 
-                row["Total Hours"] = calculate_working_hours(
-                    row["Check In"],
-                    current_time
-                )
+                    row["Total Hours"] = calculate_working_hours(
+                        row["Check In"],
+                        current_time
+                    )
 
-                with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
-                    writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-                    writer.writeheader()
-                    writer.writerows(rows)
+                    with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
+                        writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
+                        writer.writeheader()
+                        writer.writerows(rows)
 
-                return "CHECK OUT"
+                    return "CHECK OUT"
 
-            return "ALREADY COMPLETED"
+                return "ALREADY COMPLETED"
 
-    rows.append({
-        "Employee ID": str(employee_id),
-        "Employee Name": employee_name,
-        "Date": today,
-        "Check In": current_time,
-        "Check Out": "",
-        "Total Hours": ""
-    })
+        rows.append({
+            "Employee ID": str(employee_id),
+            "Employee Name": employee_name,
+            "Date": today,
+            "Check In": current_time,
+            "Check Out": "",
+            "Total Hours": ""
+        })
 
-    with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(rows)
+        with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
+            writer.writeheader()
+            writer.writerows(rows)
 
-    return "CHECK IN"
+        return "CHECK IN"
+
+
+def get_todays_attendance(today=None):
+    with _ATTENDANCE_LOCK:
+        create_attendance_file()
+
+        if today is None:
+            today = datetime.now().date()
+        elif isinstance(today, datetime):
+            today = today.date()
+        elif not isinstance(today, date):
+            raise TypeError("today must be a date or datetime.")
+
+        accepted_dates = {
+            today.strftime("%Y-%m-%d"),
+            today.strftime("%m/%d/%Y"),
+        }
+
+        with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
+            return [
+                row
+                for row in csv.DictReader(file)
+                if row.get("Date") in accepted_dates
+            ]

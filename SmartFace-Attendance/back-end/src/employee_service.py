@@ -8,7 +8,7 @@ def get_registered_employees():
     connection = get_connection()
 
     if connection is None:
-        raise Exception("Database connection failed.")
+        raise ConnectionError("Database connection failed.")
 
     registered_faces = []
 
@@ -38,6 +38,9 @@ def get_registered_employees():
                 embedding = json.loads(embedding_data)
             else:
                 embedding = embedding_data
+
+            if embedding is None:
+                continue
 
             if len(embedding) != 512:
                 print(f"Invalid embedding for employee {employee_id}")
