@@ -3,57 +3,105 @@ import csv
 import os
 from datetime import datetime
 
-# Attendance CSV file location
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 ATTENDANCE_DIR = os.path.join(BASE_DIR, "attendance")
+
 CSV_FILE = os.path.join(ATTENDANCE_DIR, "attendance.csv")
+
+FIELDNAMES = [
+    "Employee ID",
+    "Employee Name",
+    "Date",
+    "Check In",
+    "Check Out",
+    "Total Hours"
+]
+
+
+def calculate_working_hours(check_in, check_out):
+
+    start_time = datetime.strptime(check_in, "%H:%M:%S")
+    end_time = datetime.strptime(check_out, "%H:%M:%S")
+
+    duration = end_time - start_time
+
+    total_seconds = int(duration.total_seconds())
+
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
 def create_attendance_file():
+
     os.makedirs(ATTENDANCE_DIR, exist_ok=True)
 
     if not os.path.exists(CSV_FILE):
-        with open(CSV_FILE, mode="w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "Employee ID",
-                "Employee Name",
-                "Date",
-                "Check In",
-                "Check Out"
-            ])
+
+        with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
+            writer.writeheader()
+
+        return
+
+    # Upgrade existing CSV files if Total Hours column is missing
+    with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+        existing_fields = reader.fieldnames or []
+
+    if "Total Hours" not in existing_fields:
+
+        for row in rows:
+
+            row["Total Hours"] = ""
+
+            if row.get("Check In") and row.get("Check Out"):
+                row["Total Hours"] = calculate_working_hours(
+                    row["Check In"],
+                    row["Check Out"]
+                )
+
+        with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
+            writer.writeheader()
+            writer.writerows(rows)
 
 
 def mark_attendance(employee_id, employee_name):
+
     create_attendance_file()
 
     now = datetime.now()
+
     today = now.strftime("%Y-%m-%d")
     current_time = now.strftime("%H:%M:%S")
 
-    rows = []
-
-    with open(CSV_FILE, mode="r", newline="", encoding="utf-8") as file:
+    with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         rows = list(reader)
 
-    # Find today's attendance record for this employee
     for row in rows:
+
         if (
             row["Employee ID"] == str(employee_id)
             and row["Date"] == today
         ):
+
             if row["Check Out"] == "":
+
                 row["Check Out"] = current_time
 
-                with open(CSV_FILE, mode="w", newline="", encoding="utf-8") as file:
-                    writer = csv.DictWriter(file, fieldnames=[
-                        "Employee ID",
-                        "Employee Name",
-                        "Date",
-                        "Check In",
-                        "Check Out"
-                    ])
+                row["Total Hours"] = calculate_working_hours(
+                    row["Check In"],
+                    current_time
+                )
+
+                with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
+                    writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
                     writer.writeheader()
                     writer.writerows(rows)
 
@@ -61,23 +109,17 @@ def mark_attendance(employee_id, employee_name):
 
             return "ALREADY COMPLETED"
 
-    # No attendance record exists for today
     rows.append({
         "Employee ID": str(employee_id),
         "Employee Name": employee_name,
         "Date": today,
         "Check In": current_time,
-        "Check Out": ""
+        "Check Out": "",
+        "Total Hours": ""
     })
 
-    with open(CSV_FILE, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=[
-            "Employee ID",
-            "Employee Name",
-            "Date",
-            "Check In",
-            "Check Out"
-        ])
+    with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
         writer.writeheader()
         writer.writerows(rows)
 
