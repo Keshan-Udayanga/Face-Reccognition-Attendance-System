@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
+import ChatWidget from "./components/ChatWidget";
 import AddEmployee from "./pages/AddEmployee";
 import Attendance from "./pages/Attendance";
 import Dashboard from "./pages/Dashboard";
@@ -38,6 +39,7 @@ function AppShell() {
           title={currentPage.title}
         />
         <Outlet />
+        <ChatWidget />
       </div>
     </div>
   );
