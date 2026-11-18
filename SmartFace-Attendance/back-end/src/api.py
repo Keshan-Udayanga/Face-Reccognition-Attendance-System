@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import threading
@@ -37,6 +38,7 @@ app.add_middleware(
 
 MAX_IMAGE_SIZE_BYTES = 1024 * 1024
 MAX_FRAME_SIZE_BYTES = 4 * 1024 * 1024
+FACE_EMBEDDING_MODEL = "Facenet512"
 RECOGNITION_REARM_SECONDS = 3
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": (b"\xff\xd8\xff",),
@@ -148,16 +150,42 @@ async def _read_profile_photo(photo: Optional[UploadFile]):
     return image_bytes
 
 
-def _save_profile_photo(cursor, employee_id, image_bytes):
+def _generate_profile_embedding(image_bytes):
+    try:
+        from src.face_recognition import generate_face_embedding
+    except (ImportError, ValueError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Face recognition dependencies could not be loaded.",
+        ) from error
+
+    try:
+        embedding = generate_face_embedding(image_bytes)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail="The profile photo must contain a clearly visible face.",
+        ) from error
+
+    if len(embedding) != 512:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not create a valid face embedding from the profile photo.",
+        )
+    return embedding
+
+
+def _save_profile_photo(cursor, employee_id, image_bytes, embedding):
     if image_bytes is None:
         return
 
+    embedding_json = json.dumps(embedding)
     cursor.execute(
         """
         UPDATE employee_faces
         SET face_image = %s,
-            face_embedding = 'null'::jsonb,
-            model_name = NULL,
+            face_embedding = %s::jsonb,
+            model_name = %s,
             created_at = CURRENT_TIMESTAMP
         WHERE face_id = (
             SELECT face_id
@@ -168,15 +196,25 @@ def _save_profile_photo(cursor, employee_id, image_bytes):
         )
         RETURNING face_id
         """,
-        (psycopg2.Binary(image_bytes), employee_id),
+        (
+            psycopg2.Binary(image_bytes),
+            embedding_json,
+            FACE_EMBEDDING_MODEL,
+            employee_id,
+        ),
     )
     if cursor.fetchone() is None:
         cursor.execute(
             """
             INSERT INTO employee_faces (employee_id, face_image, face_embedding, model_name)
-            VALUES (%s, %s, 'null'::jsonb, NULL)
+            VALUES (%s, %s, %s::jsonb, %s)
             """,
-            (employee_id, psycopg2.Binary(image_bytes)),
+            (
+                employee_id,
+                psycopg2.Binary(image_bytes),
+                embedding_json,
+                FACE_EMBEDDING_MODEL,
+            ),
         )
 
 
@@ -513,6 +551,7 @@ async def create_employee(
 ):
     _validate_employee(employee_name, department, email, contact_number)
     image_bytes = await _read_profile_photo(photo)
+    embedding = _generate_profile_embedding(image_bytes) if image_bytes else None
     connection = _connect()
     try:
         with connection:
@@ -536,7 +575,7 @@ async def create_employee(
                     ),
                 )
                 employee_id = cursor.fetchone()[0]
-                _save_profile_photo(cursor, employee_id, image_bytes)
+                _save_profile_photo(cursor, employee_id, image_bytes, embedding)
                 employee = _fetch_employee(
                     cursor, employee_id, str(request.base_url).rstrip("/")
                 )
@@ -560,6 +599,7 @@ async def update_employee(
 ):
     _validate_employee(employee_name, department, email, contact_number)
     image_bytes = await _read_profile_photo(photo)
+    embedding = _generate_profile_embedding(image_bytes) if image_bytes else None
     connection = _connect()
     try:
         with connection:
@@ -586,7 +626,7 @@ async def update_employee(
                     raise HTTPException(status_code=404, detail="Employee not found.")
 
                 if image_bytes is not None:
-                    _save_profile_photo(cursor, employee_id, image_bytes)
+                    _save_profile_photo(cursor, employee_id, image_bytes, embedding)
                 elif remove_photo:
                     cursor.execute(
                         "DELETE FROM employee_faces WHERE employee_id = %s",

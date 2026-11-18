@@ -49,14 +49,12 @@ generated ID is displayed in the employee list and after registration.
 
 Employee details are stored in `employees`. Uploaded JPG and PNG profile
 photos (maximum 1 MB) are stored as PostgreSQL `BYTEA` in `employee_faces`.
-Creating or editing an employee and their photo runs in a single database
-transaction. Deleting an employee also deletes their face records through the
+When a photo contains a detectable face, the backend generates a FaceNet512
+embedding and stores it with the photo in the same database transaction.
+Replacing a photo regenerates its embedding. A profile photo remains optional;
+employees without one are not enrolled for face recognition until a photo is
+uploaded. Deleting an employee also deletes their face records through the
 existing cascading foreign key.
-
-Face recognition and embedding generation are not implemented. The required
-`face_embedding` column is set to JSON `null` until a later recognition
-feature generates a real embedding. Attendance statistics show zero because
-no attendance records are connected yet.
 
 ## Project structure
 

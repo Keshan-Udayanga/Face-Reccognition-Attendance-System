@@ -396,8 +396,8 @@ export default function AddEmployee() {
               <h3>{form.photoUrl ? "Looking good!" : "Upload a profile photo"}</h3>
               <p>
                 {form.photoUrl
-                  ? "This photo will appear in the employee directory."
-                  : "Drag and drop an image here, or browse files from your device."}
+                  ? "This photo will appear in the employee directory and be used to enroll face recognition."
+                  : "Add a clear face photo to enroll face recognition. You can also add one later."}
               </p>
               <div className="photo-action-row">
                 <button
@@ -443,7 +443,7 @@ export default function AddEmployee() {
           </div>
           <div className="photo-storage-note">
             <Info aria-hidden="true" size={15} />
-              A photo is optional. Uploaded images are stored in PostgreSQL.
+            A photo is optional. Uploaded photos with a detectable face are used to generate a recognition embedding.
           </div>
         </section>
 
