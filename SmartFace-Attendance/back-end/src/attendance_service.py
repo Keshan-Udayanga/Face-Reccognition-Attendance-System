@@ -1,6 +1,7 @@
 
 import csv
 import os
+import re
 import threading
 from datetime import date, datetime
 
@@ -13,6 +14,7 @@ CSV_FILE = os.path.join(ATTENDANCE_DIR, "attendance.csv")
 FIELDNAMES = [
     "Employee ID",
     "Employee Name",
+    "Departement",
     "Date",
     "Check In",
     "Check Out",
@@ -38,54 +40,77 @@ def calculate_working_hours(check_in, check_out):
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def create_attendance_file():
+def _monthly_csv_file(month):
+    return os.path.join(ATTENDANCE_DIR, f"attendance_{month}.csv")
 
-    os.makedirs(ATTENDANCE_DIR, exist_ok=True)
 
+def _parse_attendance_date(value):
+    for date_format in ("%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(value, date_format).date()
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _write_attendance_file(path, rows):
+    with open(path, "w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _migrate_legacy_attendance():
     if not os.path.exists(CSV_FILE):
-
-        with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-            writer.writeheader()
-
         return
 
-    # Upgrade existing CSV files if Total Hours column is missing
+    grouped_rows = {}
     with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        rows = list(reader)
-        existing_fields = reader.fieldnames or []
+        for row in csv.DictReader(file):
+            row_date = _parse_attendance_date(row.get("Date"))
+            if row_date is None:
+                continue
 
-    if "Total Hours" not in existing_fields:
-
-        for row in rows:
-
-            row["Total Hours"] = ""
-
-            if row.get("Check In") and row.get("Check Out"):
-                row["Total Hours"] = calculate_working_hours(
-                    row["Check In"],
-                    row["Check Out"]
+            monthly_row = {field: row.get(field, "") or "" for field in FIELDNAMES}
+            if (
+                not monthly_row["Total Hours"]
+                and monthly_row["Check In"]
+                and monthly_row["Check Out"]
+            ):
+                monthly_row["Total Hours"] = calculate_working_hours(
+                    monthly_row["Check In"],
+                    monthly_row["Check Out"],
                 )
+            grouped_rows.setdefault(row_date.strftime("%Y-%m"), []).append(monthly_row)
 
-        with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-            writer.writeheader()
-            writer.writerows(rows)
+    for month, rows in grouped_rows.items():
+        path = _monthly_csv_file(month)
+        if not os.path.exists(path):
+            _write_attendance_file(path, rows)
 
 
-def mark_attendance(employee_id, employee_name):
+def create_attendance_file(today=None):
+    os.makedirs(ATTENDANCE_DIR, exist_ok=True)
+    if today is None:
+        today = datetime.now().date()
 
+    _migrate_legacy_attendance()
+    path = _monthly_csv_file(today.strftime("%Y-%m"))
+    if not os.path.exists(path):
+        _write_attendance_file(path, [])
+    return path
+
+
+def mark_attendance(employee_id, employee_name, department=""):
     with _ATTENDANCE_LOCK:
-        create_attendance_file()
-
         now = datetime.now()
+        csv_file = create_attendance_file(now.date())
 
         today = now.strftime("%Y-%m-%d")
         today_formats = {today, now.strftime("%m/%d/%Y")}
         current_time = now.strftime("%H:%M:%S")
 
-        with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
+        with open(csv_file, "r", newline="", encoding="utf-8") as file:
             reader = csv.DictReader(file)
             rows = list(reader)
 
@@ -105,10 +130,7 @@ def mark_attendance(employee_id, employee_name):
                         current_time
                     )
 
-                    with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
-                        writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-                        writer.writeheader()
-                        writer.writerows(rows)
+                    _write_attendance_file(csv_file, rows)
 
                     return "CHECK OUT"
 
@@ -117,24 +139,20 @@ def mark_attendance(employee_id, employee_name):
         rows.append({
             "Employee ID": str(employee_id),
             "Employee Name": employee_name,
+            "Departement": department,
             "Date": today,
             "Check In": current_time,
             "Check Out": "",
             "Total Hours": ""
         })
 
-        with open(CSV_FILE, "w", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-            writer.writeheader()
-            writer.writerows(rows)
+        _write_attendance_file(csv_file, rows)
 
         return "CHECK IN"
 
 
 def get_todays_attendance(today=None):
     with _ATTENDANCE_LOCK:
-        create_attendance_file()
-
         if today is None:
             today = datetime.now().date()
         elif isinstance(today, datetime):
@@ -142,14 +160,46 @@ def get_todays_attendance(today=None):
         elif not isinstance(today, date):
             raise TypeError("today must be a date or datetime.")
 
+        csv_file = create_attendance_file(today)
         accepted_dates = {
             today.strftime("%Y-%m-%d"),
             today.strftime("%m/%d/%Y"),
         }
 
-        with open(CSV_FILE, "r", newline="", encoding="utf-8") as file:
+        with open(csv_file, "r", newline="", encoding="utf-8") as file:
             return [
                 row
                 for row in csv.DictReader(file)
                 if row.get("Date") in accepted_dates
             ]
+
+
+def get_attendance_months():
+    with _ATTENDANCE_LOCK:
+        create_attendance_file()
+
+        months = set()
+        for filename in os.listdir(ATTENDANCE_DIR):
+            match = re.fullmatch(r"attendance_(\d{4}-\d{2})\.csv", filename)
+            if match:
+                try:
+                    datetime.strptime(match.group(1), "%Y-%m")
+                except ValueError:
+                    continue
+                months.add(match.group(1))
+        return sorted(months, reverse=True)
+
+
+def get_monthly_attendance_file(month):
+    if not isinstance(month, str) or not re.fullmatch(r"\d{4}-\d{2}", month):
+        return None
+    try:
+        datetime.strptime(month, "%Y-%m")
+    except ValueError:
+        return None
+
+    with _ATTENDANCE_LOCK:
+        os.makedirs(ATTENDANCE_DIR, exist_ok=True)
+        _migrate_legacy_attendance()
+        path = _monthly_csv_file(month)
+        return path if os.path.isfile(path) else None

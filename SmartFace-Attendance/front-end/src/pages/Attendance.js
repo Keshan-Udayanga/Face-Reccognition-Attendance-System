@@ -6,6 +6,7 @@ import {
   CameraOff,
   CheckCircle2,
   Clock3,
+  Download,
   LoaderCircle,
   Radio,
   RefreshCw,
@@ -15,6 +16,8 @@ import {
   Video,
 } from "lucide-react";
 import {
+  getAttendanceMonthDownloadUrl,
+  getAttendanceMonths,
   getTodayAttendance,
   recognizeFrame,
   startRecognition as createRecognitionSession,
@@ -161,6 +164,9 @@ export default function Attendance() {
   const [records, setRecords] = useState([]);
   const [attendanceError, setAttendanceError] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [attendanceMonths, setAttendanceMonths] = useState([]);
+  const [selectedAttendanceMonth, setSelectedAttendanceMonth] = useState("");
+  const [monthlyCsvError, setMonthlyCsvError] = useState("");
   const [now, setNow] = useState(() => new Date());
 
   const refreshAttendance = useCallback(async () => {
@@ -190,6 +196,29 @@ export default function Attendance() {
     const clock = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(clock);
   }, [refreshAttendance]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAttendanceMonths()
+      .then((months) => {
+        if (!cancelled) {
+          setAttendanceMonths(months);
+          setSelectedAttendanceMonth((current) =>
+            months.includes(current) ? current : months[0] || "",
+          );
+          setMonthlyCsvError("");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setMonthlyCsvError(error.message);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isRecognizing || !sessionIdRef.current) {
@@ -558,22 +587,58 @@ export default function Attendance() {
             <h2>Today&apos;s attendance activity</h2>
             <p>Check-in and check-out records from the attendance register.</p>
           </div>
-          <button
-            aria-label="Refresh attendance"
-            className="attendance-refresh-button"
-            disabled={isRefreshing}
-            onClick={refreshAttendance}
-            type="button"
-          >
-            <RefreshCw
-              aria-hidden="true"
-              className={isRefreshing ? "attendance-spin" : ""}
-              size={16}
-            />
-            Refresh
-          </button>
+          <div className="attendance-activity-controls">
+            <label className="attendance-month-select">
+              <span>Month</span>
+              <select
+                aria-label="Select attendance month"
+                disabled={attendanceMonths.length === 0}
+                onChange={(event) => setSelectedAttendanceMonth(event.target.value)}
+                value={selectedAttendanceMonth}
+              >
+                {attendanceMonths.map((month) => (
+                  <option key={month} value={month}>{month}</option>
+                ))}
+              </select>
+            </label>
+            {selectedAttendanceMonth ? (
+              <a
+                className="attendance-download-button"
+                download
+                href={getAttendanceMonthDownloadUrl(selectedAttendanceMonth)}
+              >
+                <Download aria-hidden="true" size={16} />
+                Download CSV
+              </a>
+            ) : (
+              <button className="attendance-download-button" disabled type="button">
+                <Download aria-hidden="true" size={16} />
+                Download CSV
+              </button>
+            )}
+            <button
+              aria-label="Refresh attendance"
+              className="attendance-refresh-button"
+              disabled={isRefreshing}
+              onClick={refreshAttendance}
+              type="button"
+            >
+              <RefreshCw
+                aria-hidden="true"
+                className={isRefreshing ? "attendance-spin" : ""}
+                size={16}
+              />
+              Refresh
+            </button>
+          </div>
         </div>
 
+        {monthlyCsvError && (
+          <div className="attendance-table-error" role="alert">
+            <AlertCircle aria-hidden="true" size={18} />
+            <span>{monthlyCsvError}</span>
+          </div>
+        )}
         {attendanceError ? (
           <div className="attendance-table-error" role="alert">
             <AlertCircle aria-hidden="true" size={18} />

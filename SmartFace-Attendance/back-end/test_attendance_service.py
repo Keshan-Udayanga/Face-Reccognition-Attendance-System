@@ -28,6 +28,12 @@ class AttendanceServiceTests(unittest.TestCase):
         self.directory_patch.start()
         self.file_patch.start()
 
+    def monthly_attendance_file(self, attendance_date):
+        return os.path.join(
+            self.temporary_directory.name,
+            f"attendance_{attendance_date.strftime('%Y-%m')}.csv",
+        )
+
     def tearDown(self):
         self.file_patch.stop()
         self.directory_patch.stop()
@@ -71,16 +77,28 @@ class AttendanceServiceTests(unittest.TestCase):
         self.assertEqual([row["Employee ID"] for row in records], ["1", "2"])
 
     def test_mark_attendance_checks_in_then_out_without_adding_a_row(self):
-        self.assertEqual(attendance_service.mark_attendance(7, "Taylor"), "CHECK IN")
-        self.assertEqual(attendance_service.mark_attendance(7, "Taylor"), "CHECK OUT")
         self.assertEqual(
-            attendance_service.mark_attendance(7, "Taylor"),
+            attendance_service.mark_attendance(7, "Taylor", "Engineering"),
+            "CHECK IN",
+        )
+        self.assertEqual(
+            attendance_service.mark_attendance(7, "Taylor", "Engineering"),
+            "CHECK OUT",
+        )
+        self.assertEqual(
+            attendance_service.mark_attendance(7, "Taylor", "Engineering"),
             "ALREADY COMPLETED",
         )
 
-        with open(self.attendance_file, "r", newline="", encoding="utf-8") as file:
+        with open(
+            self.monthly_attendance_file(date.today()),
+            "r",
+            newline="",
+            encoding="utf-8",
+        ) as file:
             rows = list(csv.DictReader(file))
         self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["Departement"], "Engineering")
         self.assertTrue(rows[0]["Check In"])
         self.assertTrue(rows[0]["Check Out"])
 
@@ -100,10 +118,71 @@ class AttendanceServiceTests(unittest.TestCase):
 
         self.assertEqual(attendance_service.mark_attendance(7, "Taylor"), "CHECK OUT")
 
-        with open(self.attendance_file, "r", newline="", encoding="utf-8") as file:
+        with open(
+            self.monthly_attendance_file(today),
+            "r",
+            newline="",
+            encoding="utf-8",
+        ) as file:
             rows = list(csv.DictReader(file))
         self.assertEqual(len(rows), 1)
         self.assertTrue(rows[0]["Check Out"])
+
+    def test_legacy_attendance_is_split_into_monthly_files(self):
+        with open(self.attendance_file, "w", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=attendance_service.FIELDNAMES)
+            writer.writeheader()
+            writer.writerows([
+                {
+                    "Employee ID": "1",
+                    "Employee Name": "Ari",
+                    "Date": "2024-01-31",
+                    "Check In": "09:00:00",
+                    "Check Out": "17:00:00",
+                    "Total Hours": "",
+                },
+                {
+                    "Employee ID": "2",
+                    "Employee Name": "Sam",
+                    "Date": "02/01/2024",
+                    "Check In": "09:15:00",
+                    "Check Out": "",
+                    "Total Hours": "",
+                },
+            ])
+
+        self.assertEqual(
+            set(attendance_service.get_attendance_months()),
+            {"2024-02", "2024-01", date.today().strftime("%Y-%m")},
+        )
+        for month, expected_id in (("2024-01", "1"), ("2024-02", "2")):
+            with open(
+                os.path.join(self.temporary_directory.name, f"attendance_{month}.csv"),
+                "r",
+                newline="",
+                encoding="utf-8",
+            ) as file:
+                self.assertEqual(
+                    [row["Employee ID"] for row in csv.DictReader(file)],
+                    [expected_id],
+                )
+
+    def test_monthly_file_lookup_rejects_invalid_month(self):
+        self.assertIsNone(attendance_service.get_monthly_attendance_file("../secret"))
+        self.assertIsNone(attendance_service.get_monthly_attendance_file("2024-13"))
+
+    def test_available_months_includes_current_month_without_records(self):
+        current_month = date.today().strftime("%Y-%m")
+
+        self.assertIn(current_month, attendance_service.get_attendance_months())
+        self.assertTrue(
+            os.path.isfile(
+                os.path.join(
+                    self.temporary_directory.name,
+                    f"attendance_{current_month}.csv",
+                )
+            )
+        )
 
 
 if __name__ == "__main__":

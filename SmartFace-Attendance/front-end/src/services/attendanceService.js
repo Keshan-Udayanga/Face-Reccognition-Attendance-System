@@ -30,6 +30,14 @@ export async function getTodayAttendance() {
   return request("/attendance/today");
 }
 
+export async function getAttendanceMonths() {
+  return request("/attendance/months");
+}
+
+export function getAttendanceMonthDownloadUrl(month) {
+  return `${API_BASE_URL}/attendance/monthly/${encodeURIComponent(month)}`;
+}
+
 export async function startRecognition() {
   return request("/attendance/recognition/start", { method: "POST" });
 }

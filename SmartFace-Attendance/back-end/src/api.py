@@ -11,9 +11,15 @@ import numpy as np
 import psycopg2
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from database.connection import get_connection
-from src.attendance_service import get_todays_attendance, mark_attendance
+from src.attendance_service import (
+    get_attendance_months,
+    get_monthly_attendance_file,
+    get_todays_attendance,
+    mark_attendance,
+)
 from src.employee_service import get_registered_employees
 from src.face_matching import find_best_match
 
@@ -375,6 +381,7 @@ def recognize_frame(
                 attendance_action = mark_attendance(
                     employee_id,
                     employee["fullName"],
+                    employee.get("department", "") or "",
                 )
                 if attendance_action in ("CHECK IN", "CHECK OUT"):
                     timestamp = datetime.now().isoformat(timespec="seconds")
@@ -422,6 +429,23 @@ def today_attendance():
         }
         for row in rows
     ]
+
+
+@app.get("/api/attendance/months")
+def attendance_months():
+    return get_attendance_months()
+
+
+@app.get("/api/attendance/monthly/{month}")
+def download_monthly_attendance(month: str):
+    csv_file = get_monthly_attendance_file(month)
+    if csv_file is None:
+        raise HTTPException(status_code=404, detail="Attendance CSV for this month was not found.")
+    return FileResponse(
+        csv_file,
+        media_type="text/csv",
+        filename=os.path.basename(csv_file),
+    )
 
 
 @app.get("/api/employees")
