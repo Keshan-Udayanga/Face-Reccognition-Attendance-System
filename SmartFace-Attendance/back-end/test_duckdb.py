@@ -1,11 +1,9 @@
 
-import duckdb
+from src.chatbot_employee_service import get_all_employees
 
-# Read all CSV files inside attendance folder
-result = duckdb.sql("""
-    SELECT *
-    FROM read_csv_auto('attendance/*.csv')
-""").df()
+employees = get_all_employees()
 
-# Display CSV data
-print(result)
+print("Total Active Employees:", len(employees))
+
+for employee in employees:
+    print(employee)
