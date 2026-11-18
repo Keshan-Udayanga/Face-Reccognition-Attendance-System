@@ -18,7 +18,7 @@ export default function ChatWidget() {
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isSending]);
 
   useEffect(() => {
     function closeOnEscape(event) {
@@ -114,6 +114,22 @@ export default function ChatWidget() {
                 <div className="chat-bubble">{item.text}</div>
               </div>
             ))}
+            {isSending && (
+              <div
+                aria-label="SmartFace assistant is typing"
+                className="chat-message-row chat-message-bot"
+                role="status"
+              >
+                <div className="chat-avatar">
+                  <Bot aria-hidden="true" size={15} />
+                </div>
+                <div className="chat-bubble chat-typing">
+                  <span aria-hidden="true" />
+                  <span aria-hidden="true" />
+                  <span aria-hidden="true" />
+                </div>
+              </div>
+            )}
             <div ref={messageEndRef} />
           </div>
 
