@@ -5,14 +5,16 @@ import threading
 import time
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 import cv2
 import numpy as np
 import psycopg2
+from google.genai.errors import APIError
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from database.connection import get_connection
 from src.attendance_service import (
@@ -23,6 +25,11 @@ from src.attendance_service import (
 )
 from src.employee_service import get_registered_employees
 from src.face_matching import find_best_match
+from src.gemini_chat_service import (
+    GeminiConfigurationError,
+    GeminiResponseError,
+    generate_chat_reply,
+)
 
 app = FastAPI(title="SmartFace Employee API", version="1.0.0")
 
@@ -55,6 +62,15 @@ _RECOGNITION_LOCK = threading.RLock()
 _RECOGNITION_SESSIONS = {}
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "model"]
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=20)
+
+
 def _connect():
     connection = get_connection()
     if connection is None:
@@ -63,6 +79,25 @@ def _connect():
             detail="Could not connect to PostgreSQL. Check the backend database settings.",
         )
     return connection
+
+
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    try:
+        reply = generate_chat_reply(
+            [(message.role, message.text) for message in request.messages]
+        )
+    except GeminiConfigurationError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except GeminiResponseError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except APIError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini AI could not complete the request. Check the model, API key, and quota.",
+        ) from error
+
+    return {"reply": reply}
 
 
 def _employee_response(row, api_origin):

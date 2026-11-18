@@ -6,6 +6,7 @@ numpy
 psycopg2-binary
 pandas
 python-dotenv
+google-genai
 fastapi
 uvicorn
 python-multipart

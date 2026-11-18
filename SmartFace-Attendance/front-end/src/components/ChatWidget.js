@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Send, X } from "lucide-react";
+import { sendChatMessage } from "../services/chatbotService.js";
 import "./ChatWidget.css";
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -29,16 +31,43 @@ export default function ChatWidget() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
 
-  function sendMessage(event) {
+  async function sendMessage(event) {
     event.preventDefault();
     const text = message.trim();
-    if (!text) return;
+    if (!text || isSending) return;
 
-    setMessages((current) => [
-      ...current,
-      { id: Date.now(), sender: "user", text },
-    ]);
+    const userMessage = { id: Date.now(), sender: "user", text };
+    const conversation = [
+      ...messages.slice(1),
+      userMessage,
+    ]
+      .map((item) => ({
+        role: item.sender === "user" ? "user" : "model",
+        text: item.text,
+      }))
+      .slice(-20);
+    setMessages((current) => [...current, userMessage]);
     setMessage("");
+    setIsSending(true);
+
+    try {
+      const result = await sendChatMessage(conversation);
+      setMessages((current) => [
+        ...current,
+        { id: Date.now(), sender: "bot", text: result.reply },
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: Date.now(),
+          sender: "bot",
+          text: `Sorry, I couldn't get a reply: ${error.message}`,
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
@@ -91,14 +120,16 @@ export default function ChatWidget() {
           <form className="chat-composer" onSubmit={sendMessage}>
             <input
               aria-label="Chat message"
+              disabled={isSending}
+              maxLength={2000}
               onChange={(event) => setMessage(event.target.value)}
-              placeholder="Type a message..."
+              placeholder={isSending ? "Waiting for a reply..." : "Type a message..."}
               value={message}
             />
             <button
               aria-label="Send message"
               className="chat-send"
-              disabled={!message.trim()}
+              disabled={!message.trim() || isSending}
               type="submit"
             >
               <Send aria-hidden="true" size={17} fill="currentColor" />

@@ -32,6 +32,12 @@ The existing database connection uses the `DB_HOST`, `DB_PORT`, `DB_NAME`,
 `DB_USER`, and `DB_PASSWORD` values in `back-end/.env`. Keep this file private;
 never put database credentials in frontend code.
 
+The SmartFace chat widget sends its conversation to Gemini through the backend.
+Set `GEMINI_API_KEY` in `back-end/.env` to enable it. You can optionally set
+`GEMINI_MODEL`; otherwise the backend uses the model configured in its chat
+service. Employee records and attendance data are not included in Gemini
+requests.
+
 The employee-details migration is
 `back-end/database/migrations/001_add_employee_contact_details.sql`. It adds email,
 contact number, designation, and address columns to the existing `employees`
