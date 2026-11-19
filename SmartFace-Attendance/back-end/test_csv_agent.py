@@ -1,6 +1,7 @@
 import csv
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -30,8 +31,8 @@ class CsvAgentTests(unittest.TestCase):
         self.assertEqual(
             rows,
             [
-                {"Employee ID": "12", "Date": "2026-01-01"},
-                {"Employee ID": "34", "Date": "2026-01-01"},
+                {"Employee ID": 12, "Date": date(2026, 1, 1)},
+                {"Employee ID": 34, "Date": date(2026, 1, 1)},
             ],
         )
 

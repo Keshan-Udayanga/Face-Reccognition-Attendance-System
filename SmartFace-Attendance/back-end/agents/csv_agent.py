@@ -1,4 +1,4 @@
-import csv
+import duckdb
 from pathlib import Path
 
 
@@ -6,18 +6,36 @@ from pathlib import Path
 ATTENDANCE_DIR = Path(__file__).resolve().parent.parent / "attendance"
 
 
-def get_csv_data():
-    """Return attendance rows from every CSV file in the attendance directory."""
-    # Sorting makes the combined rows predictable when multiple monthly files exist.
-    csv_files = sorted(ATTENDANCE_DIR.glob("*.csv"))
+def get_connection():
+    """Create an in-memory DuckDB connection with attendance CSVs as a view."""
+    csv_files = list(ATTENDANCE_DIR.glob("*.csv"))
     if not csv_files:
         raise FileNotFoundError(f"No attendance CSV files found in {ATTENDANCE_DIR}.")
 
-    attendance_rows = []
+    # Escape quotes because the directory path is embedded in the DuckDB SQL statement.
+    csv_pattern = (ATTENDANCE_DIR / "*.csv").as_posix().replace("'", "''")
+    connection = duckdb.connect(database=":memory:")
+    connection.execute(f"""
+        CREATE VIEW attendance AS
+        SELECT *
+        FROM read_csv_auto(
+            '{csv_pattern}',
+            union_by_name = true
+        )
+    """)
+    return connection
 
-    for csv_file in csv_files:
-        # DictReader uses the CSV header row as keys for each returned row.
-        with csv_file.open("r", newline="", encoding="utf-8-sig") as file:
-            attendance_rows.extend(csv.DictReader(file))
 
-    return attendance_rows
+def get_csv_data():
+    """Return attendance rows from all CSV files as dictionaries using DuckDB."""
+    connection = get_connection()
+    try:
+        # DuckDB infers the columns and types, then rows are mapped to their headers.
+        result = connection.execute("SELECT * FROM attendance")
+        column_names = [column[0] for column in result.description]
+        return [
+            dict(zip(column_names, row))
+            for row in result.fetchall()
+        ]
+    finally:
+        connection.close()
