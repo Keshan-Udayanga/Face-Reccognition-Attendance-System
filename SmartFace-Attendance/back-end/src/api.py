@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from agents.supervisor_agent import SupervisorDataError, generate_supervisor_reply
 from database.connection import get_connection
 from src.attendance_service import (
     get_attendance_months,
@@ -28,7 +29,6 @@ from src.face_matching import find_best_match
 from src.gemini_chat_service import (
     GeminiConfigurationError,
     GeminiResponseError,
-    generate_chat_reply,
 )
 
 app = FastAPI(title="SmartFace Employee API", version="1.0.0")
@@ -84,13 +84,15 @@ def _connect():
 @app.post("/api/chat")
 def chat(request: ChatRequest):
     try:
-        reply = generate_chat_reply(
+        reply = generate_supervisor_reply(
             [(message.role, message.text) for message in request.messages]
         )
     except GeminiConfigurationError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except GeminiResponseError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+    except SupervisorDataError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     except APIError as error:
         raise HTTPException(
             status_code=502,
