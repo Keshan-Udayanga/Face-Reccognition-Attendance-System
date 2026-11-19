@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   CalendarDays,
@@ -6,19 +6,16 @@ import {
   CameraOff,
   CheckCircle2,
   Clock3,
-  Download,
   LoaderCircle,
+  LogIn,
+  LogOut,
   Radio,
-  RefreshCw,
   ScanFace,
   ShieldAlert,
-  UserRound,
+  Trash2,
   Video,
 } from "lucide-react";
 import {
-  getAttendanceMonthDownloadUrl,
-  getAttendanceMonths,
-  getTodayAttendance,
   recognizeFrame,
   startRecognition as createRecognitionSession,
   stopRecognition as closeRecognitionSession,
@@ -35,18 +32,16 @@ function getInitials(name = "") {
     .toUpperCase();
 }
 
-function formatTime(value) {
+function formatEventTime(value) {
   if (!value) {
     return "—";
   }
 
-  const [hours, minutes, seconds] = value.split(":");
-  const date = new Date();
-  date.setHours(Number(hours), Number(minutes), Number(seconds || 0), 0);
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
+    second: "2-digit",
+  }).format(new Date(value));
 }
 
 function AttendanceResult({ result }) {
@@ -133,16 +128,97 @@ function AttendanceResult({ result }) {
           <span>Attendance action</span>
           <strong>{actionLabel}</strong>
         </div>
-        <time>
-          {result.timestamp
-            ? new Intl.DateTimeFormat("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-                second: "2-digit",
-              }).format(new Date(result.timestamp))
-            : "—"}
-        </time>
+        <time>{formatEventTime(result.timestamp)}</time>
       </div>
+    </div>
+  );
+}
+
+function AttendanceEventHistory({
+  events,
+  filter,
+  selectedEventId,
+  onFilterChange,
+  onSelect,
+  onClear,
+}) {
+  const filters = [
+    { value: "ALL", label: "All" },
+    { value: "CHECK IN", label: "Check-ins" },
+    { value: "CHECK OUT", label: "Check-outs" },
+  ];
+  const visibleEvents = events.filter(
+    (event) => filter === "ALL" || event.attendanceAction === filter,
+  );
+
+  return (
+    <div aria-label="Recent check-in and check-out events" className="attendance-event-history">
+      <div className="attendance-event-heading">
+        <div>
+          <h3>Recent activity</h3>
+          <span>{events.length} event{events.length === 1 ? "" : "s"} this session</span>
+        </div>
+        {events.length > 0 && (
+          <button className="attendance-clear-button" onClick={onClear} type="button">
+            <Trash2 aria-hidden="true" size={14} />
+            Clear
+          </button>
+        )}
+      </div>
+
+      <div aria-label="Filter attendance events" className="attendance-event-filters" role="group">
+        {filters.map((item) => (
+          <button
+            aria-pressed={filter === item.value}
+            className={filter === item.value ? "attendance-filter-active" : ""}
+            key={item.value}
+            onClick={() => onFilterChange(item.value)}
+            type="button"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {visibleEvents.length === 0 ? (
+        <p className="attendance-event-empty" role="status">
+          {events.length === 0
+            ? "New check-ins and check-outs will appear here."
+            : `No ${filter === "CHECK IN" ? "check-in" : "check-out"} events in this session.`}
+        </p>
+      ) : (
+        <ul className="attendance-event-list">
+          {visibleEvents.map((event) => {
+            const isCheckOut = event.attendanceAction === "CHECK OUT";
+            const ActionIcon = isCheckOut ? LogOut : LogIn;
+            return (
+              <li key={event.eventId}>
+                <button
+                  aria-pressed={selectedEventId === event.eventId}
+                  className={`attendance-event-item ${
+                    selectedEventId === event.eventId ? "attendance-event-selected" : ""
+                  }`}
+                  onClick={() => onSelect(event)}
+                  type="button"
+                >
+                  <span
+                    className={`attendance-event-icon ${
+                      isCheckOut ? "attendance-event-icon-checkout" : ""
+                    }`}
+                  >
+                    <ActionIcon aria-hidden="true" size={16} />
+                  </span>
+                  <span className="attendance-event-copy">
+                    <strong>{event.employee.fullName}</strong>
+                    <small>{isCheckOut ? "Checked out" : "Checked in"}</small>
+                  </span>
+                  <time>{formatEventTime(event.timestamp)}</time>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -161,63 +237,14 @@ export default function Attendance() {
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [isStartingRecognition, setIsStartingRecognition] = useState(false);
   const [result, setResult] = useState(null);
-  const [records, setRecords] = useState([]);
-  const [attendanceError, setAttendanceError] = useState("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [attendanceMonths, setAttendanceMonths] = useState([]);
-  const [selectedAttendanceMonth, setSelectedAttendanceMonth] = useState("");
-  const [monthlyCsvError, setMonthlyCsvError] = useState("");
+  const [attendanceEvents, setAttendanceEvents] = useState([]);
+  const [attendanceFilter, setAttendanceFilter] = useState("ALL");
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [now, setNow] = useState(() => new Date());
 
-  const refreshAttendance = useCallback(async () => {
-    if (isMountedRef.current) {
-      setIsRefreshing(true);
-    }
-    try {
-      const attendance = await getTodayAttendance();
-      if (isMountedRef.current) {
-        setRecords(attendance);
-        setAttendanceError("");
-      }
-    } catch (error) {
-      if (isMountedRef.current) {
-        setAttendanceError(error.message);
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setIsRefreshing(false);
-      }
-    }
-  }, []);
-
   useEffect(() => {
-    isMountedRef.current = true;
-    refreshAttendance();
     const clock = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(clock);
-  }, [refreshAttendance]);
-
-  useEffect(() => {
-    let cancelled = false;
-    getAttendanceMonths()
-      .then((months) => {
-        if (!cancelled) {
-          setAttendanceMonths(months);
-          setSelectedAttendanceMonth((current) =>
-            months.includes(current) ? current : months[0] || "",
-          );
-          setMonthlyCsvError("");
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setMonthlyCsvError(error.message);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   useEffect(() => {
@@ -268,8 +295,15 @@ export default function Attendance() {
           setResult((current) => (current?.recognized ? current : event));
         }
 
-        if (response.faces.some((face) => face.newAttendance)) {
-          await refreshAttendance();
+        const newEvents = response.faces
+          .filter((face) => face.recognized && face.newAttendance)
+          .map((face, index) => ({
+            ...face,
+            eventId: `${face.employee.employeeId}-${face.attendanceAction}-${face.timestamp}-${index}`,
+          }));
+        if (newEvents.length > 0) {
+          setAttendanceEvents((current) => [...newEvents, ...current].slice(0, 8));
+          setSelectedEventId(newEvents[0].eventId);
         }
       } catch (error) {
         if (sessionIdRef.current !== sessionId) {
@@ -291,7 +325,7 @@ export default function Attendance() {
     const interval = window.setInterval(sendFrame, 1800);
     sendFrame();
     return () => window.clearInterval(interval);
-  }, [isRecognizing, refreshAttendance]);
+  }, [isRecognizing]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -578,117 +612,22 @@ export default function Attendance() {
             <span className={`recognition-state-dot ${isRecognizing ? "recognition-state-active" : ""}`} />
           </div>
           <AttendanceResult result={result} />
+          <AttendanceEventHistory
+            events={attendanceEvents}
+            filter={attendanceFilter}
+            onClear={() => {
+              setAttendanceEvents([]);
+              setSelectedEventId("");
+            }}
+            onFilterChange={setAttendanceFilter}
+            onSelect={(event) => {
+              setSelectedEventId(event.eventId);
+              setResult(event);
+            }}
+            selectedEventId={selectedEventId}
+          />
         </section>
       </div>
-
-      <section aria-label="Today's attendance activity" className="surface-card attendance-activity">
-        <div className="attendance-section-heading attendance-activity-heading">
-          <div>
-            <h2>Today&apos;s attendance activity</h2>
-            <p>Check-in and check-out records from the attendance register.</p>
-          </div>
-          <div className="attendance-activity-controls">
-            <label className="attendance-month-select">
-              <span>Month</span>
-              <select
-                aria-label="Select attendance month"
-                disabled={attendanceMonths.length === 0}
-                onChange={(event) => setSelectedAttendanceMonth(event.target.value)}
-                value={selectedAttendanceMonth}
-              >
-                {attendanceMonths.map((month) => (
-                  <option key={month} value={month}>{month}</option>
-                ))}
-              </select>
-            </label>
-            {selectedAttendanceMonth ? (
-              <a
-                className="attendance-download-button"
-                download
-                href={getAttendanceMonthDownloadUrl(selectedAttendanceMonth)}
-              >
-                <Download aria-hidden="true" size={16} />
-                Download CSV
-              </a>
-            ) : (
-              <button className="attendance-download-button" disabled type="button">
-                <Download aria-hidden="true" size={16} />
-                Download CSV
-              </button>
-            )}
-            <button
-              aria-label="Refresh attendance"
-              className="attendance-refresh-button"
-              disabled={isRefreshing}
-              onClick={refreshAttendance}
-              type="button"
-            >
-              <RefreshCw
-                aria-hidden="true"
-                className={isRefreshing ? "attendance-spin" : ""}
-                size={16}
-              />
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {monthlyCsvError && (
-          <div className="attendance-table-error" role="alert">
-            <AlertCircle aria-hidden="true" size={18} />
-            <span>{monthlyCsvError}</span>
-          </div>
-        )}
-        {attendanceError ? (
-          <div className="attendance-table-error" role="alert">
-            <AlertCircle aria-hidden="true" size={18} />
-            <span>{attendanceError}</span>
-          </div>
-        ) : records.length === 0 ? (
-          <div className="attendance-table-empty">
-            <UserRound aria-hidden="true" size={20} />
-            <span>No attendance records for today yet.</span>
-          </div>
-        ) : (
-          <div className="table-scroll">
-            <table className="attendance-table">
-              <thead>
-                <tr>
-                  <th scope="col">EMPLOYEE ID</th>
-                  <th scope="col">EMPLOYEE NAME</th>
-                  <th scope="col">CHECK IN</th>
-                  <th scope="col">CHECK OUT</th>
-                  <th scope="col">TOTAL HOURS</th>
-                  <th scope="col">ATTENDANCE STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((record, index) => (
-                  <tr key={`${record.employeeId}-${index}`}>
-                    <td className="attendance-table-id">{record.employeeId}</td>
-                    <td className="attendance-table-name">{record.employeeName}</td>
-                    <td>{formatTime(record.checkIn)}</td>
-                    <td>{formatTime(record.checkOut)}</td>
-                    <td>{record.totalHours || "—"}</td>
-                    <td>
-                      <span
-                        className={`attendance-status-badge ${
-                          record.status === "Present"
-                            ? "attendance-status-present"
-                            : "attendance-status-complete"
-                        }`}
-                      >
-                        <span />
-                        {record.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
     </div>
   );
 }
