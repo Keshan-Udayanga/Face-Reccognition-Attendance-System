@@ -51,7 +51,8 @@ class GeminiChatServiceTests(unittest.TestCase):
     def test_creates_a_valid_data_request_plan(self, client_for_key, _load_dotenv):
         response_text = (
             '{"sources":["csv"],"intent":"attendance_summary",'
-            '"employee_id":"7","employee_name":null,"date":"2026-11-19"}'
+            '"employee_id":"7","employee_name":null,"date":"2026-11-19",'
+            '"fields":["count"]}'
         )
         client = SimpleNamespace(
             models=SimpleNamespace(
@@ -77,6 +78,7 @@ class GeminiChatServiceTests(unittest.TestCase):
                 "employee_id": "7",
                 "employee_name": None,
                 "date": "2026-11-19",
+                "fields": ["count"],
             },
         )
         config = client.models.generate_content.call_args.kwargs["config"]

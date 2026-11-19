@@ -13,7 +13,9 @@ MODEL_NAME = "gemini-3.5-flash-lite"
 SYSTEM_INSTRUCTION = (
     "You are the SmartFace attendance application assistant. "
     "Answer clearly and helpfully about using the application. "
-    "You do not have access to employee records or live attendance data."
+    "You do not have access to employee records or live attendance data. "
+    "Answer only what the user asked, keep the reply concise, and do not add "
+    "unrequested facts, examples, or explanations."
 )
 ROUTER_INSTRUCTION = (
     "Classify the latest user request for the SmartFace attendance application, "
@@ -22,11 +24,19 @@ ROUTER_INSTRUCTION = (
     "for employee records, or both when the request needs both. For general "
     "application questions, choose no sources and use intent 'general'. "
     "Return only JSON with keys sources, intent, employee_id, employee_name, "
-    "and date. sources must contain only 'csv' and/or 'database'. intent must "
+    "date, and fields. sources must contain only 'csv' and/or 'database'. intent must "
     "be one of attendance_records, attendance_summary, employee_records, "
-    "employee_summary, combined, or general. Put missing filters as null. "
-    "Convert requested dates to YYYY-MM-DD. Do not answer the user and do not "
-    "request or include database or attendance records."
+    "employee_summary, combined, or general. fields must contain only directly "
+    "requested values from count, employee_count, attendance_count, "
+    "checked_out_count, open_count, employee_id, employee_name, department, "
+    "designation, date, attendance_status, check_in, check_out, and total_hours. "
+    "For a yes/no question about whether a named person attended on a date, "
+    "choose attendance_status. Do not include "
+    "related or helpful-but-unrequested fields. For a name such as 'Mr. Keshan', "
+    "put only 'Keshan' in employee_name, without an honorific. Put missing "
+    "filters as null and missing fields as an empty list. Convert requested "
+    "dates to YYYY-MM-DD. Do not answer the user and do not request or include "
+    "database or attendance records."
 )
 
 
@@ -125,6 +135,29 @@ def generate_data_request_plan(messages: Sequence[tuple[str, str]]) -> dict[str,
     if not isinstance(intent, str) or intent not in allowed_intents:
         raise GeminiResponseError("Gemini returned an unsupported request type.")
 
+    allowed_fields = {
+        "count",
+        "employee_count",
+        "attendance_count",
+        "checked_out_count",
+        "open_count",
+        "employee_id",
+        "employee_name",
+        "department",
+        "designation",
+        "date",
+        "attendance_status",
+        "check_in",
+        "check_out",
+        "total_hours",
+    }
+    fields = plan.get("fields", [])
+    if (
+        not isinstance(fields, list)
+        or any(not isinstance(field, str) or field not in allowed_fields for field in fields)
+    ):
+        raise GeminiResponseError("Gemini returned unsupported response fields.")
+
     employee_id = plan.get("employee_id")
     if employee_id is not None and (
         isinstance(employee_id, bool) or not isinstance(employee_id, (str, int))
@@ -150,4 +183,5 @@ def generate_data_request_plan(messages: Sequence[tuple[str, str]]) -> dict[str,
         "employee_id": str(employee_id).strip() if employee_id is not None else None,
         "employee_name": employee_name.strip() if employee_name else None,
         "date": requested_date,
+        "fields": list(dict.fromkeys(fields)),
     }
