@@ -7,6 +7,7 @@ import AddEmployee from "./pages/AddEmployee";
 import Attendance from "./pages/Attendance";
 import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
+import Reports from "./pages/Reports";
 
 const pageDetails = [
   { path: "/", title: "Dashboard", subtitle: "Welcome back, Admin!" },
@@ -73,7 +74,7 @@ export default function App() {
         <Route element={<AddEmployee />} path="employees/new" />
         <Route element={<AddEmployee />} path="employees/:employeeId/edit" />
         <Route element={<Attendance />} path="attendance" />
-        <Route element={<ComingSoon title="Reports" />} path="reports" />
+        <Route element={<Reports />} path="reports" />
         <Route element={<ComingSoon title="Settings" />} path="settings" />
       </Route>
       <Route element={<Attendance kiosk />} path="/recognition" />
