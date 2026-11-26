@@ -11,13 +11,17 @@ import {
 import { Link } from "react-router";
 import EmployeeCard from "../components/EmployeeCard";
 import StatCard from "../components/StatCard";
+import { getTodayAttendance } from "../services/attendanceService";
 import { getEmployees } from "../services/employeeService";
 import "./Dashboard.css";
 
 export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
+  const [todayAttendance, setTodayAttendance] = useState([]);
   const [error, setError] = useState("");
+  const [attendanceError, setAttendanceError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isAttendanceLoading, setIsAttendanceLoading] = useState(true);
 
   useEffect(() => {
     let isCurrent = true;
@@ -37,18 +41,42 @@ export default function Dashboard() {
         }
       });
 
+    getTodayAttendance()
+      .then((records) => {
+        if (isCurrent) {
+          setTodayAttendance(records);
+          setAttendanceError("");
+          setIsAttendanceLoading(false);
+        }
+      })
+      .catch((requestError) => {
+        if (isCurrent) {
+          setTodayAttendance([]);
+          setAttendanceError(requestError.message);
+          setIsAttendanceLoading(false);
+        }
+      });
+
     return () => {
       isCurrent = false;
     };
   }, []);
 
-  const activeCount = employees.filter((employee) => employee.status === "Active").length;
-  const presentCount = employees.filter(
-    (employee) => employee.attendanceStatus === "Present",
+  const activeEmployees = employees.filter(
+    (employee) => employee.status === "Active",
+  );
+  const activeCount = activeEmployees.length;
+  const presentEmployeeIds = new Set(
+    todayAttendance
+      .filter((record) => record.status === "Present" || record.status === "Checked out")
+      .map((record) => String(record.employeeId)),
+  );
+  const presentCount = activeEmployees.filter((employee) =>
+    presentEmployeeIds.has(String(employee.employeeId ?? employee.id)),
   ).length;
-  const absentCount = employees.filter(
-    (employee) => employee.attendanceStatus === "Absent",
-  ).length;
+  const absentCount = activeCount - presentCount;
+  const attendanceCountsUnavailable =
+    isAttendanceLoading || Boolean(attendanceError);
 
   return (
     <div className="page-content dashboard-page">
@@ -80,6 +108,12 @@ export default function Dashboard() {
         <p role="status">Connecting to the employee database...</p>
       ) : (
         <>
+          {attendanceError && (
+            <div className="form-error" role="alert">
+              <CircleAlert aria-hidden="true" size={18} />
+              <span>Could not load today&apos;s attendance: {attendanceError}</span>
+            </div>
+          )}
           <section aria-label="Employee statistics" className="stats-grid">
             <StatCard
               icon={BriefcaseBusiness}
@@ -97,21 +131,33 @@ export default function Dashboard() {
             />
             <StatCard
               icon={CalendarCheck2}
-              note="Attendance records not connected"
+              note={
+                attendanceError
+                  ? "Attendance data unavailable"
+                  : isAttendanceLoading
+                    ? "Loading today's attendance"
+                    : "Attendance recorded today"
+              }
               title="Today's Present"
               tone="violet"
-              value={presentCount}
+              value={attendanceCountsUnavailable ? "—" : presentCount}
             />
             <StatCard
               icon={CalendarX2}
-              note="Attendance records not connected"
+              note={
+                attendanceError
+                  ? "Attendance data unavailable"
+                  : isAttendanceLoading
+                    ? "Loading today's attendance"
+                    : "Active employees not checked in"
+              }
               title="Today's Absent"
               tone="amber"
-              value={absentCount}
+              value={attendanceCountsUnavailable ? "—" : absentCount}
             />
           </section>
 
-          <section className="recent-section surface-card">
+          <section>
             <div className="section-heading">
               <div>
                 <h2>Recent Employees</h2>
