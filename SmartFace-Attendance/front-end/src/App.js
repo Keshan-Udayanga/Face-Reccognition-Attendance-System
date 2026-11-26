@@ -76,6 +76,7 @@ export default function App() {
         <Route element={<ComingSoon title="Reports" />} path="reports" />
         <Route element={<ComingSoon title="Settings" />} path="settings" />
       </Route>
+      <Route element={<Attendance kiosk />} path="/recognition" />
       <Route element={<Navigate replace to="/" />} path="*" />
     </Routes>
   );

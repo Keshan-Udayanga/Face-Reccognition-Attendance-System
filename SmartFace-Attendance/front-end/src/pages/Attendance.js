@@ -21,6 +21,7 @@ import {
   stopRecognition as closeRecognitionSession,
 } from "../services/attendanceService";
 import "./Attendance.css";
+import "./RecognitionKiosk.css";
 
 function getInitials(name = "") {
   return name
@@ -42,6 +43,111 @@ function formatEventTime(value) {
     minute: "2-digit",
     second: "2-digit",
   }).format(new Date(value));
+}
+
+function getKioskStatus({
+  cameraError,
+  recognitionError,
+  cameraStatus,
+  isOpeningCamera,
+  isStartingRecognition,
+  isRecognizing,
+  isAnalyzingFrame,
+  hasDetectedFace,
+  result,
+}) {
+  if (cameraError) {
+    return { type: "error", label: "CAMERA ERROR", message: cameraError };
+  }
+  if (recognitionError) {
+    return {
+      type: "error",
+      label: "RECOGNITION ERROR",
+      message: recognitionError,
+    };
+  }
+  if (isOpeningCamera || cameraStatus === "connecting") {
+    return {
+      type: "loading",
+      label: "CAMERA INITIALIZING",
+      message: "Please allow camera access to start attendance recognition.",
+    };
+  }
+  if (isStartingRecognition) {
+    return {
+      type: "recognizing",
+      label: "RECOGNIZING EMPLOYEE",
+      message: "Preparing the secure face recognition session.",
+    };
+  }
+  if (result && !result.recognized) {
+    return {
+      type: "unknown",
+      label: "UNKNOWN EMPLOYEE",
+      message: "This face is not registered. No attendance has been recorded.",
+    };
+  }
+  if (result?.recognized) {
+    if (result.attendanceAction === "CHECK IN") {
+      return {
+        type: "success",
+        label: "CHECK IN SUCCESS",
+        message: "Employee recognized successfully!",
+      };
+    }
+    if (result.attendanceAction === "CHECK OUT") {
+      return {
+        type: "checkout",
+        label: "CHECK OUT SUCCESS",
+        message: "Employee check-out successful!",
+      };
+    }
+    if (result.attendanceAction === "ALREADY COMPLETED") {
+      return {
+        type: "completed",
+        label: "EMPLOYEE ALREADY COMPLETED ATTENDANCE",
+        message: "This employee has already completed attendance for today.",
+      };
+    }
+    return {
+      type: "detected",
+      label: "FACE DETECTED",
+      message: "Employee identity verified.",
+    };
+  }
+  if (isRecognizing && isAnalyzingFrame && hasDetectedFace) {
+    return {
+      type: "recognizing",
+      label: "RECOGNIZING EMPLOYEE",
+      message: "Face detected. Please hold still while we verify your identity.",
+    };
+  }
+  if (isRecognizing && hasDetectedFace) {
+    return {
+      type: "detected",
+      label: "FACE DETECTED",
+      message: "Please hold still while we verify your identity.",
+    };
+  }
+  if (isRecognizing) {
+    return {
+      type: "scanning",
+      label: "LOOKING FOR FACE",
+      message: "Center your face inside the scanning frame.",
+    };
+  }
+  if (cameraStatus === "connected") {
+    return {
+      type: "idle",
+      label: "CAMERA READY",
+      message: "Starting live recognition...",
+    };
+  }
+  return {
+    type: "waiting",
+    label: "WAITING FOR CAMERA",
+    message: "Camera access is needed to mark attendance.",
+  };
 }
 
 function AttendanceResult({ result }) {
@@ -223,7 +329,7 @@ function AttendanceEventHistory({
   );
 }
 
-export default function Attendance() {
+export default function Attendance({ kiosk = false }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -236,6 +342,8 @@ export default function Attendance() {
   const [isOpeningCamera, setIsOpeningCamera] = useState(false);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [isStartingRecognition, setIsStartingRecognition] = useState(false);
+  const [isAnalyzingFrame, setIsAnalyzingFrame] = useState(false);
+  const [hasDetectedFace, setHasDetectedFace] = useState(false);
   const [result, setResult] = useState(null);
   const [attendanceEvents, setAttendanceEvents] = useState([]);
   const [attendanceFilter, setAttendanceFilter] = useState("ALL");
@@ -265,6 +373,7 @@ export default function Attendance() {
       }
 
       frameInFlightRef.current = true;
+      setIsAnalyzingFrame(true);
       try {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -281,6 +390,10 @@ export default function Attendance() {
           return;
         }
         setRecognitionError("");
+        setHasDetectedFace(response.faces.length > 0);
+        if (kiosk && response.faces.length === 0) {
+          setResult(null);
+        }
         const event =
           response.faces.find((face) => face.isNewRecognition) ||
           response.faces.find((face) => face.recognized) ||
@@ -319,13 +432,16 @@ export default function Attendance() {
         }
       } finally {
         frameInFlightRef.current = false;
+        if (isMountedRef.current) {
+          setIsAnalyzingFrame(false);
+        }
       }
     };
 
     const interval = window.setInterval(sendFrame, 1800);
     sendFrame();
     return () => window.clearInterval(interval);
-  }, [isRecognizing]);
+  }, [isRecognizing, kiosk]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -362,7 +478,7 @@ export default function Attendance() {
       openedStream = stream;
       if (!isMountedRef.current) {
         stream.getTracks().forEach((track) => track.stop());
-        return;
+        return false;
       }
       streamRef.current = stream;
       if (videoRef.current) {
@@ -385,11 +501,12 @@ export default function Attendance() {
         };
       });
       setCameraStatus("connected");
+      return true;
     } catch (error) {
       openedStream?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       if (!isMountedRef.current) {
-        return;
+        return false;
       }
       const messages = {
         NotAllowedError: "Camera permission was denied. Allow camera access in your browser settings and try again.",
@@ -398,6 +515,7 @@ export default function Attendance() {
       };
       setCameraStatus("disconnected");
       setCameraError(messages[error.name] || error.message || "Could not initialize the camera.");
+      return false;
     } finally {
       if (isMountedRef.current) {
         setIsOpeningCamera(false);
@@ -460,6 +578,29 @@ export default function Attendance() {
     }
   }
 
+  async function retryCamera() {
+    await stopCamera();
+    const cameraOpened = await openCamera();
+    if (cameraOpened && isMountedRef.current) {
+      await beginRecognition();
+    }
+  }
+
+  useEffect(() => {
+    if (!kiosk) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(async () => {
+      const cameraOpened = await openCamera();
+      if (cameraOpened && isMountedRef.current) {
+        await beginRecognition();
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [kiosk]);
+
   const formattedDate = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
@@ -471,6 +612,186 @@ export default function Attendance() {
     minute: "2-digit",
     second: "2-digit",
   }).format(now);
+
+  if (kiosk) {
+    const kioskStatus = getKioskStatus({
+      cameraError,
+      recognitionError,
+      cameraStatus,
+      isOpeningCamera,
+      isStartingRecognition,
+      isRecognizing,
+      isAnalyzingFrame,
+      hasDetectedFace,
+      result,
+    });
+    const StatusIcon = {
+      error: AlertCircle,
+      loading: LoaderCircle,
+      recognizing: ScanFace,
+      unknown: ShieldAlert,
+      success: CheckCircle2,
+      checkout: LogOut,
+      completed: CheckCircle2,
+      detected: ScanFace,
+      scanning: Radio,
+      idle: Camera,
+      waiting: CameraOff,
+    }[kioskStatus.type];
+    const cameraLabel =
+      cameraStatus === "connected"
+        ? "CAMERA LIVE"
+        : cameraStatus === "connecting"
+          ? "CONNECTING"
+          : "CAMERA OFFLINE";
+    const employee = result?.recognized ? result.employee : null;
+
+    return (
+      <main className="recognition-kiosk">
+        <header className="kiosk-header">
+          <div className="kiosk-brand-mark">
+            <ScanFace aria-hidden="true" size={25} strokeWidth={1.9} />
+          </div>
+          <div className="kiosk-heading-copy">
+            <h1>SMARTFACE ATTENDANCE</h1>
+            <p>AI-Powered Employee Face Recognition</p>
+          </div>
+          <div
+            className={`kiosk-camera-indicator kiosk-camera-indicator-${cameraStatus}`}
+            role="status"
+          >
+            <span />
+            {cameraLabel}
+          </div>
+        </header>
+
+        <div className="kiosk-content">
+          <section aria-label="Live face recognition camera" className="kiosk-camera-section">
+            <div
+              className={`camera-preview kiosk-camera-preview ${
+                cameraStatus === "connected" ? "camera-preview-connected" : ""
+              }`}
+            >
+              <video
+                aria-label="Live face recognition camera preview"
+                autoPlay
+                className={cameraStatus === "connected" ? "" : "camera-video-hidden"}
+                muted
+                playsInline
+                ref={videoRef}
+              />
+              {cameraStatus !== "connected" && (
+                <div className="kiosk-camera-placeholder">
+                  {isOpeningCamera ? (
+                    <>
+                      <LoaderCircle
+                        aria-hidden="true"
+                        className="kiosk-loader"
+                        size={34}
+                      />
+                      <strong>Initializing your camera</strong>
+                      <span>Allow camera access when your browser asks.</span>
+                    </>
+                  ) : cameraError ? (
+                    <>
+                      <CameraOff aria-hidden="true" size={34} />
+                      <strong>Camera access needed</strong>
+                      <span>{cameraError}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera aria-hidden="true" size={34} />
+                      <strong>Preparing the camera</strong>
+                      <span>Your live preview will appear here.</span>
+                    </>
+                  )}
+                </div>
+              )}
+              {cameraStatus === "connected" && isRecognizing && (
+                <div aria-hidden="true" className="kiosk-scan-overlay">
+                  <div className="kiosk-face-target" />
+                </div>
+              )}
+            </div>
+            <canvas className="camera-capture-canvas" ref={canvasRef} />
+            <p className="kiosk-instruction">
+              <ScanFace aria-hidden="true" size={17} />
+              Please look directly at the camera to mark your attendance.
+            </p>
+          </section>
+
+          <section
+            aria-live="polite"
+            className={`kiosk-status-card kiosk-status-${kioskStatus.type}`}
+            role="status"
+          >
+            <div className="kiosk-status-main">
+              <span className="kiosk-status-icon">
+                <StatusIcon
+                  aria-hidden="true"
+                  className={kioskStatus.type === "loading" ? "kiosk-loader" : ""}
+                  size={25}
+                />
+              </span>
+              <div className="kiosk-status-copy">
+                <span className="kiosk-status-eyebrow">LIVE RECOGNITION STATUS</span>
+                <h2>{kioskStatus.label}</h2>
+                <p>{kioskStatus.message}</p>
+              </div>
+            </div>
+
+            {employee && (
+              <div className="kiosk-employee-result">
+                <span className="kiosk-employee-avatar">
+                  {employee.photoUrl ? (
+                    <img alt="" src={employee.photoUrl} />
+                  ) : (
+                    getInitials(employee.fullName)
+                  )}
+                </span>
+                <div className="kiosk-employee-copy">
+                  <span>RECOGNIZED EMPLOYEE</span>
+                  <strong>{employee.fullName}</strong>
+                  <small>ID {employee.employeeId}</small>
+                  {employee.department && <small>{employee.department}</small>}
+                </div>
+                {result.attendanceAction && (
+                  <span
+                    className={`kiosk-attendance-badge kiosk-attendance-badge-${kioskStatus.type}`}
+                  >
+                    {result.attendanceAction}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {cameraError && (
+              <button
+                className="kiosk-retry-button"
+                disabled={isOpeningCamera}
+                onClick={retryCamera}
+                type="button"
+              >
+                <Camera aria-hidden="true" size={16} />
+                Try camera again
+              </button>
+            )}
+            {recognitionError && cameraStatus === "connected" && (
+              <button
+                className="kiosk-retry-button"
+                disabled={isStartingRecognition}
+                onClick={beginRecognition}
+                type="button"
+              >
+                <ScanFace aria-hidden="true" size={16} />
+                Try recognition again
+              </button>
+            )}
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="page-content attendance-page">

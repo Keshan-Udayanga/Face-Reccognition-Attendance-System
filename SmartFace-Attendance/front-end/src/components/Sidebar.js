@@ -15,6 +15,7 @@ const navigationItems = [
   { label: "Employees", path: "/employees", icon: UsersRound },
   { label: "Add Employee", path: "/employees/new", icon: UserRoundPlus },
   { label: "Attendance", path: "/attendance", icon: CalendarCheck2 },
+  { label: "Face Recognition", path: "/recognition", icon: ScanFace, newTab: true },
   { label: "Reports", path: "/reports", icon: BarChart3 },
   { label: "Settings", path: "/settings", icon: Settings2 },
 ];
@@ -66,12 +67,14 @@ export default function Sidebar({ isOpen, onClose }) {
 
         <div className="sidebar-section-label">WORKSPACE</div>
         <nav aria-label="Main navigation" className="sidebar-nav">
-          {navigationItems.map(({ label, path, icon: Icon }) => (
+          {navigationItems.map(({ label, path, icon: Icon, newTab }) => (
             <NavLink
               aria-current={isItemActive(path) ? "page" : undefined}
               className={`sidebar-link ${isItemActive(path) ? "sidebar-link-active" : ""}`}
               key={path}
               onClick={onClose}
+              rel={newTab ? "noopener noreferrer" : undefined}
+              target={newTab ? "_blank" : undefined}
               to={path}
             >
               <Icon aria-hidden="true" size={19} strokeWidth={1.9} />
