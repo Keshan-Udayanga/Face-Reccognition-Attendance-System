@@ -105,8 +105,8 @@ function getKioskStatus({
     if (result.attendanceAction === "ALREADY COMPLETED") {
       return {
         type: "completed",
-        label: "EMPLOYEE ALREADY COMPLETED ATTENDANCE",
-        message: "This employee has already completed attendance for today.",
+        label: "ALREADY COMPLETED",
+        message: "You have already completed attendance for today.",
       };
     }
     return {
@@ -423,13 +423,6 @@ export default function Attendance({ kiosk = false }) {
           return;
         }
         setRecognitionError(error.message);
-        setIsRecognizing(false);
-        sessionIdRef.current = "";
-        if (sessionId) {
-          closeRecognitionSession(sessionId).catch((stopError) => {
-            console.error("Could not close the recognition session.", stopError);
-          });
-        }
       } finally {
         frameInFlightRef.current = false;
         if (isMountedRef.current) {
